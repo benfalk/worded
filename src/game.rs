@@ -24,10 +24,8 @@ impl Game {
         self.chars_exact.clear();
     }
 
-    pub fn add_exclussions(&mut self, exclussions: &str) {
-        for char in exclussions.chars() {
-            self.exclussions.insert(char);
-        }
+    pub fn add_exclussion(&mut self, exclussion: char) {
+        self.exclussions.insert(exclussion);
     }
 
     pub fn char_exact(&mut self, loc: usize, char: char) {

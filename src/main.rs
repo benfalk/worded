@@ -1,15 +1,15 @@
 #![feature(vec_into_raw_parts)]
 
+mod assets;
 mod game;
 mod word_bank;
-mod assets;
 
 use game::Game;
-use yew::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlSelectElement;
+use yew::prelude::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum CharStatus {
     Excluded,
     Shift,
@@ -24,6 +24,16 @@ impl CharStatus {
             Excluded => *self = Shift,
             Shift => *self = Exact,
             Exact => *self = Excluded,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        use CharStatus::*;
+
+        match *self {
+            Excluded => "excluded",
+            Shift => "shift",
+            Exact => "exact",
         }
     }
 }
@@ -49,6 +59,7 @@ impl Default for GuessCharacter {
     }
 }
 
+#[derive(Clone)]
 struct Guess {
     characters: [GuessCharacter; 5],
     word: String,
@@ -73,6 +84,9 @@ impl Guess {
 
 enum GameMessage {
     SelectWord(String),
+    ToggleChar(usize),
+    CommitWord,
+    Reset,
 }
 
 struct GameComponent {
@@ -99,10 +113,39 @@ impl Component for GameComponent {
 
     fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
         use GameMessage::*;
+        use CharStatus::*;
 
         match msg {
             SelectWord(word) => {
                 self.current_guess = Guess::from_string(&word);
+                true
+            },
+            ToggleChar(pos) => {
+                self.current_guess.characters[pos].status.toggle();
+                true
+            },
+            CommitWord => {
+                for (pos, charstatus) in self.current_guess.characters.iter().enumerate() {
+                    match charstatus.status {
+                        Excluded => {
+                            self.game.add_exclussion(charstatus.char);
+                        },
+                        Shift => {
+                            self.game.char_shift(pos, charstatus.char);
+                        },
+                        Exact => {
+                            self.game.char_exact(pos, charstatus.char);
+                        }
+                    }
+                }
+                self.previous_guesses.push(self.current_guess.clone());
+                self.current_guess = Guess::from_string(self.game.words()[0]);
+                true
+            },
+            Reset => {
+                self.game.reset();
+                self.previous_guesses.clear();
+                self.current_guess = Guess::from_string(self.game.best_guess());
                 true
             }
         }
@@ -110,7 +153,7 @@ impl Component for GameComponent {
 
     fn view(&self, ctx: &Context<Self>) -> Html {
         let link = ctx.link();
-        let on_word_change = link.callback(|e: Event|{
+        let on_word_change = link.callback(|e: Event| {
             let select = e.target().unwrap().unchecked_into::<HtmlSelectElement>();
             GameMessage::SelectWord(select.value())
         });
@@ -118,21 +161,51 @@ impl Component for GameComponent {
         html! {
             <div class="container">
                 <h3>{ "Wordle Solver" }</h3>
-                <div class="current_guess">
+                <div class="previous_guesses">
                 {
-                    self.current_guess.characters.into_iter().enumerate().map(|(_pos, gc)|{
-                        html!{ <button>{ gc.char }</button> }
+                    self.previous_guesses.iter().map(|guess| {
+                        html!{
+                            <div class="guess">
+                            {
+                                guess.characters.iter().map(|gc|{
+                                    html!{
+                                        <button class={gc.status.as_str()}>{ gc.char }</button>
+                                    }
+                                }).collect::<Html>()
+                            }
+                                <br />
+                            </div>
+                        }
                     }).collect::<Html>()
                 }
                 </div>
+                <div class="current_guess guess">
+                {
+                    self.current_guess.characters.into_iter().enumerate().map(|(pos, gc)|{
+                        html!{
+                            <button
+                                class={gc.status.as_str()}
+                                onclick={link.callback(move |_| GameMessage::ToggleChar(pos))}
+                            >{ gc.char }</button> }
+                    }).collect::<Html>()
+                }
+                </div>
+                <hr />
                 <div class="word_selection">
                     <select onchange={on_word_change}>
                     {
-                        self.game.words().into_iter().map(|word|{
+                        self.game.words().into_iter().take(200).map(|word|{
                             html!{ <option selected={self.current_guess.is_for(word)} value={word.to_owned()}>{ word }</option> }
                         }).collect::<Html>()
                     }
                     </select>
+                    <br />
+                    <button onclick={link.callback(|_| GameMessage::CommitWord)}>
+                        { "Commit Guess" }
+                    </button>
+                    <button onclick={link.callback(|_| GameMessage::Reset)}>
+                        { "Start Over" }
+                    </button>
                 </div>
             </div>
         }
