@@ -25,14 +25,28 @@ impl Game {
     }
 
     pub fn add_exclussion(&mut self, exclussion: char) {
+        if self.chars_exact.iter().any(|(_,c)| *c == exclussion) {
+            return;
+        }
+
+        if self.chars_shift.iter().any(|(_,c)| *c == exclussion) {
+            return;
+        }
+
         self.exclussions.insert(exclussion);
     }
 
     pub fn char_exact(&mut self, loc: usize, char: char) {
+        self.exclussions.remove(&char);
         self.chars_exact.insert((loc, char));
     }
 
+    pub fn has_exact(&self, loc: usize, char: char) -> bool {
+        self.chars_exact.contains(&(loc, char))
+    }
+
     pub fn char_shift(&mut self, loc: usize, char: char) {
+        self.exclussions.remove(&char);
         self.chars_shift.insert((loc, char));
     }
 

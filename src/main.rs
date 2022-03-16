@@ -118,6 +118,11 @@ impl Component for GameComponent {
         match msg {
             SelectWord(word) => {
                 self.current_guess = Guess::from_string(&word);
+                for (pos, cha) in self.current_guess.characters.iter_mut().enumerate() {
+                    if self.game.has_exact(pos, cha.char) {
+                        cha.status = CharStatus::Exact;
+                    }
+                }
                 true
             },
             ToggleChar(pos) => {
@@ -139,7 +144,13 @@ impl Component for GameComponent {
                     }
                 }
                 self.previous_guesses.push(self.current_guess.clone());
-                self.current_guess = Guess::from_string(self.game.words()[0]);
+                let next_word = self.game.words().iter().nth(0).map(|w| *w).unwrap_or(".....");
+                self.current_guess = Guess::from_string(next_word);
+                for (pos, cha) in self.current_guess.characters.iter_mut().enumerate() {
+                    if self.game.has_exact(pos, cha.char) {
+                        cha.status = CharStatus::Exact;
+                    }
+                }
                 true
             },
             Reset => {
@@ -160,7 +171,7 @@ impl Component for GameComponent {
 
         html! {
             <div class="container">
-                <h3>{ "Wordle Solver" }</h3>
+                <h3>{ format!("Words Available: {}", self.game.words().len()) }</h3>
                 <div class="previous_guesses">
                 {
                     self.previous_guesses.iter().map(|guess| {
@@ -213,5 +224,8 @@ impl Component for GameComponent {
 }
 
 fn main() {
-    yew::start_app::<GameComponent>();
+    let window = web_sys::window().expect("a window");
+    let document = window.document().expect("a document");
+    let element = document.get_element_by_id("wordle-server").unwrap();
+    yew::start_app_in_element::<GameComponent>(element);
 }
